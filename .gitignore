@@ -1,8 +1,7 @@
-/build/
-/.cache/
 *.o
 *.a
 *.so
 *.so.*
 *.dylib
-compile_commands.json
+examples/dvbs2_version
+tests/dvbs2_test_version
