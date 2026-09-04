@@ -10,9 +10,7 @@
 extern "C" {
 #endif
 
-#define DVBS2_VERSION_MAJOR 0
-#define DVBS2_VERSION_MINOR 1
-#define DVBS2_VERSION_PATCH 0
+#define DVBS2_VERSION "0.1.0"
 
 /** Returns the library version as a static string. */
 const char *dvbs2_version(void);

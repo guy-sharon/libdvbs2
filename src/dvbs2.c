@@ -1,5 +1,6 @@
 #include "dvbs2/dvbs2.h"
 
-const char* dvbs2_version(void) {
-    return "0.1.0";
+const char *dvbs2_version(void)
+{
+    return DVBS2_VERSION;
 }

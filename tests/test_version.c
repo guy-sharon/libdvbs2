@@ -5,6 +5,6 @@
 
 int main(void)
 {
-    assert(strcmp(dvbs2_version(), "0.1.0") == 0);
+    assert(strcmp(dvbs2_version(), DVBS2_VERSION) == 0);
     return 0;
 }
