@@ -1,0 +1,46 @@
+name: Test
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux
+            os: ubuntu-latest
+          - name: macOS
+            os: macos-latest
+          - name: Windows
+            os: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up MSYS2
+        if: runner.os == 'Windows'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-make
+
+      - name: Run tests
+        if: runner.os != 'Windows'
+        run: make test
+
+      - name: Run tests
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: make test
