@@ -8,14 +8,11 @@ ifeq ($(OS),Windows_NT)
 EXE := .exe
 endif
 
-# Recursively find files with Make functions, rather than a platform shell command.
-rwildcard = $(wildcard $(1)$(2)) $(foreach dir,$(wildcard $(1)*/),$(call rwildcard,$(dir),$(2)))
-
 LIB      = libdvbs2.a
-SRC      := $(sort $(call rwildcard,src/,*.c))
+SRC      := $(shell find src -type f -name '*.c' -print | sort)
 LIB_OBJ  := $(SRC:.c=.o)
 EXAMPLE  = examples/dvbs2_version$(EXE)
-TEST_SRC := $(sort $(call rwildcard,tests/,test.c))
+TEST_SRC := $(shell find tests -type f -name test.c -print | sort)
 TEST_BIN := $(patsubst %.c,%$(EXE),$(TEST_SRC))
 
 .PHONY: all test clean $(TEST_BIN)
