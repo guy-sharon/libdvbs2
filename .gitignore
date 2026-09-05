@@ -5,3 +5,4 @@
 *.dylib
 examples/dvbs2_version*
 tests/**/test
+*.svg
