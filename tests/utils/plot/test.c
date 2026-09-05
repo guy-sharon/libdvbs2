@@ -27,6 +27,7 @@ static void test_write_scatter_svg(void)
     assert(strstr(output, "<circle") != NULL);
     assert(strstr(output, "</svg>") != NULL);
     assert(fclose(stream) == 0);
+    assert(remove(filename) == 0);
 }
 
 static void test_invalid_input(void)
