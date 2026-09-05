@@ -4,4 +4,4 @@
 *.so.*
 *.dylib
 examples/dvbs2_version
-tests/dvbs2_test_version
+tests/**/test
