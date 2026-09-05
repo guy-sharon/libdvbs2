@@ -31,7 +31,9 @@ jobs:
         uses: msys2/setup-msys2@v2
         with:
           msystem: UCRT64
-          update: true
+          # Avoid a full MSYS2 system upgrade on every CI run.
+          # setup-msys2 caches downloaded packages by default.
+          update: false
           install: >-
             make
             mingw-w64-ucrt-x86_64-gcc
