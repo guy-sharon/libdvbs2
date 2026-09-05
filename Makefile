@@ -1,6 +1,6 @@
 CC      ?= cc
 AR      ?= ar
-CFLAGS  ?= -std=c99 -Wall -Wextra -Wpedantic -O2
+CFLAGS  ?= -std=c99 -Wall -Werror -Wextra -Wpedantic -O2
 CPPFLAGS += -Iinclude
 
 EXE :=
