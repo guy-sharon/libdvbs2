@@ -12,6 +12,33 @@ enum {
 
 #define PLOT_PADDING_FRACTION 0.05f
 
+int plot_write_complex(const char *filename, 
+                       const complexf_t *data, 
+                       size_t count, 
+                       const char *title) {
+
+    float *x = malloc(count * sizeof(float));
+    float *y = malloc(count * sizeof(float));
+    size_t i;
+    int result;
+
+    if (x == NULL || y == NULL) {
+        free(x);
+        free(y);
+        return -1;
+    }
+
+    for (i = 0; i < count; ++i) {
+        x[i] = data[i].real;
+        y[i] = data[i].imag;
+    }
+
+    result = plot_write_scatter_svg(filename, x, y, count, title);
+
+    free(x);
+    free(y);
+    return result;
+}
 int plot_write_scatter_svg(const char *filename, const float *x, const float *y,
                            size_t count, const char *title)
 {
