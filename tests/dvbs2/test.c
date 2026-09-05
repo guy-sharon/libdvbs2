@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "dvbs2/dvbs2.h"
+#include "dvbs2.h"
 
 int main(void)
 {

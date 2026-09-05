@@ -1,0 +1,14 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "compilerPath": "/usr/bin/cc",
+            "cStandard": "c99",
+            "includePath": [
+                "${workspaceFolder}/include",
+                "${workspaceFolder}/tests"
+            ]
+        }
+    ],
+    "version": 4
+}
