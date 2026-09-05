@@ -1,13 +1,22 @@
 CC      ?= cc
 AR      ?= ar
 CFLAGS  ?= -std=c99 -Wall -Wextra -Wpedantic -O2
-CPPFLAGS = -Iinclude
+CPPFLAGS += -Iinclude
+
+EXE :=
+ifeq ($(OS),Windows_NT)
+EXE := .exe
+endif
+
+# Recursively find files with Make functions, rather than a platform shell command.
+rwildcard = $(wildcard $(1)$(2)) $(foreach dir,$(wildcard $(1)*/),$(call rwildcard,$(dir),$(2)))
 
 LIB      = libdvbs2.a
-LIB_OBJ  = src/dvbs2.o
-EXAMPLE  = examples/dvbs2_version
-TEST_SRC := $(shell find tests -type f -name test.c | sort)
-TEST_BIN := $(patsubst %.c,%,$(TEST_SRC))
+SRC      := $(sort $(call rwildcard,src/,*.c))
+LIB_OBJ  := $(SRC:.c=.o)
+EXAMPLE  = examples/dvbs2_version$(EXE)
+TEST_SRC := $(sort $(call rwildcard,tests/,test.c))
+TEST_BIN := $(patsubst %.c,%$(EXE),$(TEST_SRC))
 
 .PHONY: all test clean $(TEST_BIN)
 

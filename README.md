@@ -12,6 +12,9 @@
 
 ## Build
 
+Requirements: a C99 compiler and GNU Make. GCC and Clang work on Linux and macOS;
+on Windows, use a GNU-compatible toolchain such as MSYS2/MinGW or LLVM-MinGW.
+
 ```sh
 make
 make test

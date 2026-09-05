@@ -1,8 +1,7 @@
 {
     "configurations": [
         {
-            "name": "Linux",
-            "compilerPath": "/usr/bin/cc",
+            "name": "Default",
             "cStandard": "c99",
             "includePath": [
                 "${workspaceFolder}/include",
