@@ -10,8 +10,6 @@ static void test_random_number_generator(void)
     float floats[SAMPLE_COUNT];
     int has_different_integer = 0;
 
-    printf("Testing random number generator...\n");
-
     /* The same seed must reproduce the same integer and float sequence. */
     random_set_seed(12345);
     for (int i = 0; i < SAMPLE_COUNT; ++i) {

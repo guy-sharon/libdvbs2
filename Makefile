@@ -20,10 +20,11 @@ $(EXAMPLE): examples/version.c $(LIB)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $< $(LIB)
 
 $(TEST_BIN): $(LIB)
-	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(dir $@)*.c $(LIB)
+	@$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(dir $@)*.c $(LIB)
 	./$@
 
 test: $(TEST_BIN)
+	@$(MAKE) --no-print-directory clean
 
 clean:
-	$(RM) $(LIB) $(LIB_OBJ) $(EXAMPLE) $(TEST_BIN)
+	@$(RM) $(LIB) $(LIB_OBJ) $(EXAMPLE) $(TEST_BIN)

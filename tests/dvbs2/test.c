@@ -6,7 +6,6 @@
 
 int main(void)
 {
-    printf("Testing dvbs2_version...\n");
     assert(strcmp(dvbs2_version(), DVBS2_VERSION) == 0);
     return 0;
 }
