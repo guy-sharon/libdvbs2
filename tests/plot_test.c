@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#include "plot.h"
+#include "utils/plot/plot.h"
 #include "complex.h"
 
 static void test_write_scatter_svg(void)

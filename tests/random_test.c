@@ -1,7 +1,7 @@
 #include <assert.h>
 #include <stdio.h>
 
-#include "random.h"
+#include "utils/random/random.h"
 
 static void test_random_number_generator(void)
 {

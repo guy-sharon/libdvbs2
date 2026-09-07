@@ -12,7 +12,8 @@ LIB      = libdvbs2.a
 SRC      := $(shell find src -type f -name '*.c' -print | sort)
 LIB_OBJ  := $(SRC:.c=.o)
 EXAMPLE  = examples/dvbs2_version$(EXE)
-TEST_SRC := $(shell find tests -type f -name test.c -print | sort)
+TEST_SRC := $(shell find tests -maxdepth 1 -type f -name '*_test.c' -print | sort)
+TEST_SUPPORT := $(shell find tests -type f -name '*.c' ! -name '*_test.c' -print | sort)
 TEST_BIN := $(patsubst %.c,%$(EXE),$(TEST_SRC))
 
 .PHONY: all test clean $(TEST_BIN)
@@ -25,8 +26,8 @@ $(LIB): $(LIB_OBJ)
 $(EXAMPLE): examples/version.c $(LIB)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $< $(LIB)
 
-$(TEST_BIN): $(LIB)
-	@$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $(dir $@)*.c $(LIB)
+$(TEST_BIN): %$(EXE): %.c $(LIB)
+	@$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $< $(TEST_SUPPORT) $(LIB)
 	./$@
 
 test: $(TEST_BIN)

@@ -1,5 +1,5 @@
-#include "bbheader/bbheader.h"
-#include "bbheader/matype.h"
+#include "bbheader.h"
+#include "matype.h"
 
 #include <stdio.h>
 
