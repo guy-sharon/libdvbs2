@@ -9,4 +9,4 @@
 
 uint8_t crc8(const uint8_t *data, size_t length);
 
-#endif
+#endif /* DVBS2_CRC_H */
