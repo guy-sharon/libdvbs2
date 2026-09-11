@@ -23,8 +23,8 @@
 } ts_gs_t;
 
 typedef enum {
-    SIS_MIS_MULTIPLE = 0,
-    SIS_MIS_SINGLE = 1
+    SIS_MIS_MULTIPLE_INPUT = 0,
+    SIS_MIS_SINGLE_INPUT = 1
 } sis_mis_t;
 
 typedef enum {
@@ -50,16 +50,17 @@ typedef enum {
 } ro_t;
 
 typedef struct {
-    uint8_t ts_gs : 2; // transport stream / generic stream
-    uint8_t sis_mis : 1; // single input stream / multiple input stream
-    uint8_t ccm_acm : 1; // constant coding modulation / adaptive coding modulation
-    uint8_t issyi : 1; // if ISSYI = 1 = active, the ISSY field is inserted after UPs
-    uint8_t npd : 1; // null packet detection
-    uint8_t ro : 2; // transmission Roll-off factor
+    ts_gs_t ts_gs; // transport stream / generic stream
+    sis_mis_t sis_mis; // single input stream / multiple input stream
+    ccm_acm_t ccm_acm; // constant coding modulation / adaptive coding modulation
+    issyi_t issyi; // if ISSYI = 1 = active, the ISSY field is inserted after UPs
+    npd_t npd; // null packet detection
+    ro_t ro; // transmission Roll-off factor
 
-    uint8_t isi: 8; // Input Stream Identifier if ISSYI = 1, otherwise reserved
+    uint8_t isi; // Input Stream Identifier if ISSYI = 1, otherwise reserved
 } matype_t;
 
-const int matype_size = sizeof(matype_t);
+void matype_to_bytes(const matype_t *matype, uint8_t *bytes);
+void matype_from_bytes(const uint8_t *bytes, matype_t *matype);
 
 #endif /* DVBS2_MATYPE_H */

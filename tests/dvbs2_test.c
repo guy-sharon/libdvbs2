@@ -4,6 +4,7 @@
 
 #include "dvbs2.h"
 
+
 int main(void)
 {
     assert(strcmp(dvbs2_version(), DVBS2_VERSION) == 0);
