@@ -3,6 +3,15 @@ CC := $(shell (command -v cc >/dev/null 2>&1 && echo cc) || (where cc >/dev/null
 endif
 AR      ?= ar
 CFLAGS  ?= -std=c99 -Wall -Werror -Wextra -Wpedantic -O2
+
+# Detect number of CPUs for parallel builds
+JOBS := $(shell \
+  nproc 2>/dev/null || \
+  sysctl -n hw.ncpu 2>/dev/null || \
+  cmd.exe /c "echo %NUMBER_OF_PROCESSORS%" 2>/dev/null || \
+  echo 4 \
+)
+MAKEFLAGS += -j$(JOBS)
 CPPFLAGS += -Iinclude
 
 EXE :=
