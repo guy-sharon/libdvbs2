@@ -1,4 +1,6 @@
-CC      ?= cc
+ifeq ($(origin CC), default)
+CC := $(shell (command -v cc >/dev/null 2>&1 && echo cc) || (where cc >/dev/null 2>&1 && echo cc) || echo gcc)
+endif
 AR      ?= ar
 CFLAGS  ?= -std=c99 -Wall -Werror -Wextra -Wpedantic -O2
 CPPFLAGS += -Iinclude

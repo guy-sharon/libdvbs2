@@ -7,8 +7,8 @@
 
 #define PBRS_INITIAL_SEQUENCE       0x4A80
 
-void bbframe_init_scramble();
-uint8_t bbframe_get_next_scramble_byte();
+void bbframe_init_scramble(void);
+uint8_t bbframe_get_next_scramble_byte(void);
 
 void bbframe_scramble(uint8_t *data, size_t length);
 void bbframe_descramble(uint8_t *data, size_t length);

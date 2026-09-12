@@ -3,11 +3,11 @@
 
 static uint16_t lfsr = PBRS_INITIAL_SEQUENCE;
 
-void bbframe_init_scramble() {
+void bbframe_init_scramble(void) {
     lfsr = PBRS_INITIAL_SEQUENCE;
 }
 
-uint8_t bbframe_get_next_scramble_byte() {
+uint8_t bbframe_get_next_scramble_byte(void) {
     uint8_t scramble_byte = 0;
     for (int bit = 0; bit < 8; bit++) {
         uint8_t feedback = ((lfsr) ^ (lfsr >> 1)) & 1;
