@@ -22,6 +22,11 @@ void test_frame(void) {
     frame_get_matype(&frame, &matype2);
 
     assert(matype2.ts_gs == matype.ts_gs);
+    assert(matype2.sis_mis == matype.sis_mis);
+    assert(matype2.ccm_acm == matype.ccm_acm);
+    assert(matype2.issyi == matype.issyi);
+    assert(matype2.npd == matype.npd);
+    assert(matype2.ro == matype.ro);
 }
 
 int main(void) {
