@@ -36,8 +36,7 @@ void test_scramble(frame_t *framePtr) {
     size_t len = sizeof(original);
 
     memcpy(framePtr->buffer, original, len);
-    framePtr->kbch = (uint16_t)len;
-
+        
     frame_scramble(framePtr);
     assert(memcmp(framePtr->buffer, expected, len) == 0);
 
@@ -47,7 +46,9 @@ void test_scramble(frame_t *framePtr) {
 
 void test_frame(void) {
     frame_t frame = {0};
-    frame_init(&frame);
+    modcod_t modcod = SHORT_8_9;
+
+    frame_init(&frame, modcod);
 
     test_matype(&frame);
     test_scramble(&frame);
