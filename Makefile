@@ -27,7 +27,7 @@ TEST_SRC := $(shell find tests -maxdepth 1 -type f -name '*_test.c' -print | sor
 TEST_SUPPORT := $(shell find tests -type f -name '*.c' ! -name '*_test.c' -print | sort)
 TEST_BIN := $(patsubst %.c,%$(EXE),$(TEST_SRC))
 
-.PHONY: all test clean $(TEST_BIN) $(TEST_BIN)
+.PHONY: all test clean $(TEST_BIN)
 
 all: $(LIB) $(EXAMPLE)
 
@@ -38,11 +38,11 @@ $(EXAMPLE): examples/version.c $(LIB)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $< $(LIB)
 
 $(TEST_BIN): %$(EXE): %.c $(LIB)
-	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $< $(TEST_SUPPORT) $(LIB)
+	@$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $< $(TEST_SUPPORT) $(LIB)
 	./$@
 
 test: $(TEST_BIN)
-	@$(MAKE) --no-print-directory clean
+	@$(RM) $(LIB) $(LIB_OBJ) $(EXAMPLE) $(TEST_BIN)
 
 clean:
 	@$(RM) $(LIB) $(LIB_OBJ) $(EXAMPLE) $(TEST_BIN)
