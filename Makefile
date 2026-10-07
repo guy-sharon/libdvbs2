@@ -24,10 +24,13 @@ SRC      := $(shell find src -type f -name '*.c' -print | sort)
 LIB_OBJ  := $(SRC:.c=.o)
 EXAMPLE  = examples/dvbs2_version$(EXE)
 TEST_SRC := $(shell find tests -maxdepth 1 -type f -name '*_test.c' -print | sort)
+TEST_TIME := tests/time_test.c
+TEST_SRC := $(filter-out $(TEST_TIME),$(TEST_SRC))
 TEST_SUPPORT := $(shell find tests -type f -name '*.c' ! -name '*_test.c' -print | sort)
 TEST_BIN := $(patsubst %.c,%$(EXE),$(TEST_SRC))
+TIME_BIN := tests/time_test$(EXE)
 
-.PHONY: all test clean $(TEST_BIN)
+.PHONY: all test clean time $(TEST_BIN)
 
 all: $(LIB) $(EXAMPLE)
 
@@ -42,7 +45,15 @@ $(TEST_BIN): %$(EXE): %.c $(LIB)
 	./$@
 
 test: $(TEST_BIN)
-	@$(RM) $(LIB) $(LIB_OBJ) $(EXAMPLE) $(TEST_BIN)
+	@$(RM) $(LIB) $(LIB_OBJ) $(EXAMPLE) $(TEST_BIN) $(TIME_BIN)
+
+time: $(TIME_BIN)
+	clear
+	@./$<
+	@$(RM) $(LIB) $(LIB_OBJ) $(EXAMPLE) $(TEST_BIN) $(TIME_BIN)
+
+$(TIME_BIN): $(TEST_TIME) $(LIB)
+	@$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ $< $(TEST_SUPPORT) $(LIB)
 
 clean:
-	@$(RM) $(LIB) $(LIB_OBJ) $(EXAMPLE) $(TEST_BIN)
+	@$(RM) $(LIB) $(LIB_OBJ) $(EXAMPLE) $(TEST_BIN) $(TIME_BIN)

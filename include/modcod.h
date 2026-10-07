@@ -25,7 +25,7 @@ typedef struct {
 } modcod_t;
 
 #define MODCOD(name, _kbch, _kldpc, _bch_t, _nldpc) \
-    modcod_t name = {.kbch=_kbch, .kldpc=_kldpc, .bch_t=_bch_t, .nldpc=_nldpc}
+    static const modcod_t name = {.kbch=_kbch, .kldpc=_kldpc, .bch_t=_bch_t, .nldpc=_nldpc}
 
 /* Normal FECFRAME — nldpc = 64 800  (Table 5a) */
 
