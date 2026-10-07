@@ -6,3 +6,4 @@
 examples/dvbs2_version*
 tests/**/test
 *.svg
+*.exe

@@ -1,0 +1,322 @@
+#include "bch.h"
+#include "stdint.h"
+#include "stdlib.h"
+#include "string.h"
+
+// *********************************************************************** //
+// ******************************* Statics ******************************* //
+// *********************************************************************** //
+static const uint16_t ALPHA = 2;
+static uint16_t *alpha_to;
+static uint16_t *index_of;
+static uint16_t GF_SIZE = 0;
+static uint8_t t = 0;
+
+typedef struct {
+    uint8_t *coeffs;
+    uint8_t deg;
+} polynom8_t;
+
+typedef struct {
+    uint16_t *coeffs;
+    uint8_t deg;
+} polynom16_t;
+
+static polynom8_t primitive_poly = {0};
+static polynom8_t gen_poly = {0};
+
+#define POLY_FREE(poly) \
+    if (poly.coeffs) { \
+        free(poly.coeffs); \
+    }
+
+#define POLY8_INIT(name, ...) \
+    { \
+        uint8_t ones[] = __VA_ARGS__; \
+        name.deg = ones[0]; \
+        name.coeffs = calloc(ones[0]+1, sizeof(uint8_t)); \
+        for (int i = 0; i < sizeof(ones)/sizeof(ones[0]); i++) { \
+            name.coeffs[ones[i]] = 1; \
+        } \
+    }
+
+#define POLY8_DEFINE(name, ...) \
+    polynom8_t name; \
+    POLY8_INIT(name, __VA_ARGS__); 
+
+// **************************************************************************** //
+// ******************************* Galois Field ******************************* //
+// **************************************************************************** //
+uint16_t gf_mul(uint16_t a, uint16_t b) {
+    if (a == 0 || b == 0) {
+        return 0;
+    }
+
+    return alpha_to[(index_of[a] + index_of[b]) % GF_SIZE];
+}
+
+uint16_t gf_div(uint16_t a, uint16_t b) {
+    if (a == 0) {
+        return 0;
+    }
+
+    return alpha_to[(index_of[a] - index_of[b]) % GF_SIZE];
+}
+
+uint16_t arr_to_gf(uint8_t *arr, size_t len) {
+    uint16_t gf = 0;
+    for (int i = 0; i < len; i++) {
+        gf += arr[i] * (1<<i);
+    }
+    return gf;
+}
+
+void lsfr_step(uint8_t *lsfr, size_t lsfr_len, bool f_in, polynom8_t poly) {
+    bool out = lsfr[lsfr_len-1];
+    for (int i = lsfr_len-1; i > 0; i--) {
+        lsfr[i] = lsfr[i-1] ^ (out & poly.coeffs[i]);
+    }
+    lsfr[0] = (out & poly.coeffs[0]) ^ f_in;
+}
+
+void poly_div(polynom8_t poly_nom, polynom8_t poly_den, polynom8_t *out) {
+    const size_t n = poly_nom.deg;
+    out->coeffs = calloc(poly_den.deg, sizeof(uint8_t));
+    for (int i = 0; i < n+1; i++) {
+        bool f_in = poly_nom.coeffs[n-i];
+        lsfr_step(out->coeffs, poly_den.deg, f_in, poly_den);
+    }
+}
+
+void poly_mul(polynom8_t poly1, polynom8_t poly2, polynom8_t *out) {
+    out->coeffs = calloc(poly1.deg + poly2.deg + 1, sizeof(uint8_t));
+
+    for (int i = 0; i < poly1.deg+1; i++) {
+        if (poly1.coeffs[i]) {
+            for (int j = 0; j < poly2.deg+1; j++) {
+                if (poly2.coeffs[j]) {
+                    out->coeffs[i + j] ^= 1;
+                }
+            }
+        }
+    }
+}
+
+void poly8_add(polynom8_t poly1, polynom8_t poly2, polynom8_t *out) {
+    uint8_t deg = poly1.deg > poly2.deg ? poly1.deg : poly2.deg;
+    if (out->coeffs == NULL) {
+        out->coeffs = calloc(deg+1, sizeof(uint8_t));
+    }
+    for (int i = 0; i < deg+1; i++) {
+        bool v1 = i > poly1.deg ? 0 : poly1.coeffs[i];
+        bool v2 = i > poly2.deg ? 0 : poly2.coeffs[i];
+        out->coeffs[i] = v1 ^ v2;
+    }
+}
+
+void poly16_add(polynom16_t poly1, polynom16_t poly2, polynom16_t *out) {
+    uint8_t deg = poly1.deg > poly2.deg ? poly1.deg : poly2.deg;
+    if (out->coeffs == NULL) {
+        out->coeffs = calloc(deg+1, sizeof(uint16_t));
+    }
+    for (int i = 0; i < deg+1; i++) {
+        uint16_t v1 = i > poly1.deg ? 0 : poly1.coeffs[i];
+        uint16_t v2 = i > poly2.deg ? 0 : poly2.coeffs[i];
+        out->coeffs[i] = v1 ^ v2;
+    }
+}
+
+uint16_t gf_poly_eval_alpha_power(polynom8_t poly, uint16_t power) {
+    // only for polys with coeffs 0 and 1
+    uint16_t res = 0;
+    for (int i = 0; i < poly.deg+1; i++) {
+        if (poly.coeffs[i]) {
+            res ^= alpha_to[(i*power) % GF_SIZE];
+        }
+    }
+    return res;
+}
+
+void build_alpha_table() {
+    GF_SIZE = (1<<primitive_poly.deg)-1;
+    alpha_to = malloc(GF_SIZE*sizeof(uint16_t));
+    index_of = malloc((GF_SIZE+1)*sizeof(uint16_t));
+
+    uint8_t *lsfr = calloc(primitive_poly.deg, sizeof(uint8_t));
+    lsfr[0] = 1;
+    for (int power = 0; power < GF_SIZE; power++) {
+        alpha_to[power] = arr_to_gf(lsfr, primitive_poly.deg);
+        index_of[alpha_to[power]] = power;
+        lsfr_step(lsfr, primitive_poly.deg, 0, primitive_poly);
+    }
+    free(lsfr);
+}
+
+void encode(uint8_t *msg, size_t msg_len, uint8_t *bchfec) {
+    polynom8_t rem_poly;
+
+    polynom8_t msg_poly = {.deg = msg_len + gen_poly.deg - 1};
+    msg_poly.coeffs = calloc(msg_poly.deg+1, sizeof(uint8_t));
+    memcpy(&msg_poly.coeffs[gen_poly.deg+1], msg, msg_len);
+
+    poly_div(msg_poly, gen_poly, &rem_poly);
+    memcpy(bchfec, rem_poly.coeffs, rem_poly.deg+1);
+}
+
+void calc_syndromes(polynom8_t codeword_poly, uint16_t *syndromes) {
+    for (uint16_t power = 1; power < 2*t+1; power++) {
+        syndromes[power-1] = gf_poly_eval_alpha_power(codeword_poly, power);
+    }
+}
+
+void berlekamp_massey(uint16_t *syndromes, polynom16_t *C) {
+    uint16_t L = 0;
+    uint16_t b = 1;
+    uint16_t m = 1;
+    polynom16_t B = {.coeffs = (uint16_t[]){1}, .deg=0};
+    C->deg = 2*t;
+    C->coeffs = calloc(C->deg+1, sizeof(uint16_t));
+    C->coeffs[0] = 1;
+    for (uint8_t n = 0; n < 2*t; n++) {
+        uint16_t d = syndromes[n];
+
+        for (int i = 1; i < L+1; i++) {
+            if (i < C->deg+1) {
+                d ^= gf_mul(C->coeffs[i], syndromes[n-i]);
+            }
+        }
+
+        if (d == 0) {
+            m += 1;
+            continue;
+        }
+        
+        polynom16_t T = {.deg = C->deg};
+        T.coeffs = malloc((C->deg+1)*sizeof(uint16_t));
+        memcpy(&T.coeffs, C->coeffs,(C->deg+1)*sizeof(uint16_t));
+
+        uint16_t coef = gf_div(d, b);
+        polynom16_t correction = {.deg = m + B.deg};
+        correction.coeffs = calloc(correction.deg+1, sizeof(uint16_t));
+        for (int i = m; i < m+B.deg+1; i++) {
+            correction.coeffs[i] = gf_mul(coef, B.coeffs[i-m]);
+        }
+
+        poly16_add(*C, correction, C);
+        if (2 * L <= n) {
+            L = n + 1 - L;
+            POLY_FREE(B);
+            B.coeffs = T.coeffs;
+            b = d;
+            m = 1;
+        } else {
+            m += 1;
+        }
+    }
+}
+
+// ######################################################
+// os.system("cls")
+
+// G = []
+
+polynom8_t g[12];
+void bch_init() {
+    bool b_short = 1;
+    if (b_short) {
+        POLY8_INIT(primitive_poly, {14,5,3,1,0});
+        
+        POLY8_INIT(g[0], {14,5,3,1,0});
+        POLY8_INIT(g[1], {14,11,8,6,0});
+        POLY8_INIT(g[2], {14,10,9,6,2,1,0});
+        POLY8_INIT(g[3], {14,12,10,8,7,4,0});
+        POLY8_INIT(g[4], {14,13,11,9,8,6,4,2,0});
+        POLY8_INIT(g[5], {14,13,9,8,7,3,0});
+        POLY8_INIT(g[6], {14,13,11,10,7,6,5,2,0});
+        POLY8_INIT(g[7], {14,11,10,9,8,5,1});
+        POLY8_INIT(g[8], {14,10,9,3,2,1,0});
+        POLY8_INIT(g[9], {14,12,11,9,6,3,0});
+        POLY8_INIT(g[10], {14,12,11,4,0});
+        POLY8_INIT(g[11], {14,13,10,8,7,6,5,3,2,1,0});
+    } else {
+        POLY8_INIT(primitive_poly, {16,5,3,2,0});
+
+        POLY8_INIT(g[0], {16,5,3,2,0});
+        POLY8_INIT(g[1], {16,8,6,5,4,1,0});
+        POLY8_INIT(g[2], {16,11,10,9,8,7,5,4,3,2,0});
+        POLY8_INIT(g[3], {16,14,12,11,9,6,4,2,0});
+        POLY8_INIT(g[4], {16,12,11,10,9,8,5,3,2,1,0});
+        POLY8_INIT(g[5], {16,15,14,13,12,10,9,8,7,5,4,2,0});
+        POLY8_INIT(g[6], {16,15,13,11,10,9,8,6,5,2,0});
+        POLY8_INIT(g[7], {16,14,13,12,9,8,6,5,2,1,0});
+        POLY8_INIT(g[8], {16,11,10,9,7,5,0});
+        POLY8_INIT(g[9], {16,14,13,12,10,8,7,5,2,1,0});
+        POLY8_INIT(g[10], {16,13,12,11,9,5,3,2,0});
+        POLY8_INIT(g[11], {16,12,11,9,7,6,5,1,0});
+    }
+
+    t = 12;
+    POLY8_DEFINE(tmp, {0});
+    for (int i = 0; i < t; i += 2) {
+        poly_mul(gen_poly, g[i], &tmp);
+        POLY_FREE(gen_poly);
+        poly_mul(tmp, g[i+1], &gen_poly);
+        POLY_FREE(tmp);
+    }
+
+}
+
+// print("building alpha table...")
+// build_alpha_table(primitive_poly)
+
+// print("building rem lut table")
+// build_rem_lut_table(gen_poly, GF_SIZE)
+
+// msg = np.random.randint(0, 2, 14232)
+// print("encoding")
+// codeword = encode(msg)
+
+// # errors
+// codeword.arr[2] ^= 1
+// codeword.arr[13] ^= 1
+// codeword.arr[9] ^= 1
+// codeword.arr[439] ^= 1
+// codeword.arr[4391] ^= 1
+// codeword.arr[4329] ^= 1
+// codeword.arr[9439] ^= 1
+
+// print("decoding")
+// N = 50
+// t0 = time.perf_counter()
+// with cProfile.Profile() as pr:
+//     for _ in tqdm(range(N)):
+//         syndromes = calc_syndromes(codeword)
+//         locator_poly = berlekamp_massey(syndromes)
+
+//         # chien
+//         num_errors = 0
+//         for pow in range(1<<primitive_poly.deg):
+//             res = 0
+//             for p,coeff in enumerate(locator_poly.arr):
+//                 if coeff:
+//                     res ^= alpha_to[(index_of[coeff] - p*pow) % GF_SIZE]
+
+//             if res == 0:
+//                 num_errors += 1
+//                 codeword.arr[pow] ^= 1
+//                 print(pow)
+
+//         if num_errors != locator_poly.deg:
+//             print("Decoding failure")
+
+//         for pow in range(1,2*t+1):
+//             if gf_poly_eval_alpha_power(codeword, pow) != 0:
+//                 print("Decoding failure")
+//                 break
+            
+// stats = Stats(pr).sort_stats("cumtime")
+// stats.print_stats("test.py", 10) 
+
+// dt = time.perf_counter()
+// avg_time = dt / N
+// print(avg_time)
