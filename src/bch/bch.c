@@ -2,11 +2,12 @@
 #include "stdint.h"
 #include "stdlib.h"
 #include "string.h"
+#include "stdbool.h"
+#include "stdio.h"
 
 // *********************************************************************** //
 // ******************************* Statics ******************************* //
 // *********************************************************************** //
-static const uint16_t ALPHA = 2;
 static uint16_t *alpha_to;
 static uint16_t *index_of;
 static uint16_t GF_SIZE = 0;
@@ -35,7 +36,7 @@ static polynom8_t gen_poly = {0};
         uint8_t ones[] = __VA_ARGS__; \
         name.deg = ones[0]; \
         name.coeffs = calloc(ones[0]+1, sizeof(uint8_t)); \
-        for (int i = 0; i < sizeof(ones)/sizeof(ones[0]); i++) { \
+        for (long unsigned int i = 0; i < sizeof(ones)/sizeof(ones[0]); i++) { \
             name.coeffs[ones[i]] = 1; \
         } \
     }
@@ -65,7 +66,7 @@ uint16_t gf_div(uint16_t a, uint16_t b) {
 
 uint16_t arr_to_gf(uint8_t *arr, size_t len) {
     uint16_t gf = 0;
-    for (int i = 0; i < len; i++) {
+    for (size_t i = 0; i < len; i++) {
         gf += arr[i] * (1<<i);
     }
     return gf;
@@ -82,7 +83,8 @@ void lsfr_step(uint8_t *lsfr, size_t lsfr_len, bool f_in, polynom8_t poly) {
 void poly_div(polynom8_t poly_nom, polynom8_t poly_den, polynom8_t *out) {
     const size_t n = poly_nom.deg;
     out->coeffs = calloc(poly_den.deg, sizeof(uint8_t));
-    for (int i = 0; i < n+1; i++) {
+    out->deg = poly_den.deg - 1;
+    for (size_t i = 0; i < n+1; i++) {
         bool f_in = poly_nom.coeffs[n-i];
         lsfr_step(out->coeffs, poly_den.deg, f_in, poly_den);
     }
@@ -90,6 +92,7 @@ void poly_div(polynom8_t poly_nom, polynom8_t poly_den, polynom8_t *out) {
 
 void poly_mul(polynom8_t poly1, polynom8_t poly2, polynom8_t *out) {
     out->coeffs = calloc(poly1.deg + poly2.deg + 1, sizeof(uint8_t));
+    out->deg = poly1.deg + poly2.deg;
 
     for (int i = 0; i < poly1.deg+1; i++) {
         if (poly1.coeffs[i]) {
@@ -107,6 +110,7 @@ void poly8_add(polynom8_t poly1, polynom8_t poly2, polynom8_t *out) {
     if (out->coeffs == NULL) {
         out->coeffs = calloc(deg+1, sizeof(uint8_t));
     }
+    out->deg = deg;
     for (int i = 0; i < deg+1; i++) {
         bool v1 = i > poly1.deg ? 0 : poly1.coeffs[i];
         bool v2 = i > poly2.deg ? 0 : poly2.coeffs[i];
@@ -119,6 +123,7 @@ void poly16_add(polynom16_t poly1, polynom16_t poly2, polynom16_t *out) {
     if (out->coeffs == NULL) {
         out->coeffs = calloc(deg+1, sizeof(uint16_t));
     }
+    out->deg = deg;
     for (int i = 0; i < deg+1; i++) {
         uint16_t v1 = i > poly1.deg ? 0 : poly1.coeffs[i];
         uint16_t v2 = i > poly2.deg ? 0 : poly2.coeffs[i];
@@ -190,7 +195,7 @@ void berlekamp_massey(uint16_t *syndromes, polynom16_t *C) {
             m += 1;
             continue;
         }
-        
+
         polynom16_t T = {.deg = C->deg};
         T.coeffs = malloc((C->deg+1)*sizeof(uint16_t));
         memcpy(&T.coeffs, C->coeffs,(C->deg+1)*sizeof(uint16_t));
@@ -220,12 +225,22 @@ void berlekamp_massey(uint16_t *syndromes, polynom16_t *C) {
 
 // G = []
 
+void print_poly(polynom8_t poly) {
+    printf("poly(deg=%d): ", poly.deg);
+    for (int i = 0; i < poly.deg+1; i++) {
+        if (poly.coeffs[i]) {
+            printf("x%d ", i);
+        }
+    }
+    printf("\n\n");
+}
+
 polynom8_t g[12];
 void bch_init() {
     bool b_short = 1;
     if (b_short) {
         POLY8_INIT(primitive_poly, {14,5,3,1,0});
-        
+
         POLY8_INIT(g[0], {14,5,3,1,0});
         POLY8_INIT(g[1], {14,11,8,6,0});
         POLY8_INIT(g[2], {14,10,9,6,2,1,0});
@@ -233,7 +248,7 @@ void bch_init() {
         POLY8_INIT(g[4], {14,13,11,9,8,6,4,2,0});
         POLY8_INIT(g[5], {14,13,9,8,7,3,0});
         POLY8_INIT(g[6], {14,13,11,10,7,6,5,2,0});
-        POLY8_INIT(g[7], {14,11,10,9,8,5,1});
+        POLY8_INIT(g[7], {14,11,10,9,8,5,0});
         POLY8_INIT(g[8], {14,10,9,3,2,1,0});
         POLY8_INIT(g[9], {14,12,11,9,6,3,0});
         POLY8_INIT(g[10], {14,12,11,4,0});
@@ -257,7 +272,8 @@ void bch_init() {
 
     t = 12;
     POLY8_DEFINE(tmp, {0});
-    for (int i = 0; i < t; i += 2) {
+    poly_mul(g[0], g[1], &gen_poly);
+    for (int i = 2; i < t; i += 2) {
         poly_mul(gen_poly, g[i], &tmp);
         POLY_FREE(gen_poly);
         poly_mul(tmp, g[i+1], &gen_poly);
