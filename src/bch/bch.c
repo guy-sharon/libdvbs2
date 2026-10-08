@@ -28,9 +28,10 @@ static polynom8_t primitive_poly = {0};
 static polynom8_t gen_poly = {0};
 
 #define POLY_FREE(poly) \
-    if (poly.coeffs) { \
-        free(poly.coeffs); \
-    }
+    do { \
+        free((poly).coeffs); \
+        (poly).coeffs = NULL; \
+    } while (0)
 
 #define POLY8_INIT(name, ...) \
     { \
@@ -169,6 +170,8 @@ void calc_syndromes(polynom8_t codeword_poly, uint16_t *syndromes) {
     }
 }
 
+void berlekamp_massey(uint16_t *syndromes, polynom16_t *C);
+
 void encode(uint8_t *msg, size_t msg_len, uint8_t *bchfec) {
     polynom8_t msg_poly = {0};
     polynom8_t rem_poly = {0};
@@ -183,6 +186,66 @@ void encode(uint8_t *msg, size_t msg_len, uint8_t *bchfec) {
 
     free(msg_poly.coeffs);
     free(rem_poly.coeffs);
+}
+
+size_t bch_parity_bytes(void) {
+    return gen_poly.deg;
+}
+
+bool decode(uint8_t *codeword, size_t codeword_len, uint8_t *msg) {
+    polynom8_t codeword_poly = {0};
+    polynom16_t locator_poly = {0};
+    uint16_t *syndromes = malloc(2*t*sizeof(uint16_t));
+    bool success = true;
+
+    if (codeword == NULL || msg == NULL || codeword_len <= gen_poly.deg || syndromes == NULL) {
+        free(syndromes);
+        return false;
+    }
+
+    codeword_poly.deg = codeword_len - 1;
+    codeword_poly.coeffs = codeword;
+
+    calc_syndromes(codeword_poly, syndromes);
+    berlekamp_massey(syndromes, &locator_poly);
+
+    int num_errors = 0;
+    for (int pow = 0; pow < GF_SIZE; pow++) {
+        uint16_t res = 0;
+        for (int p = 0; p <= locator_poly.deg; p++) {
+            uint16_t coeff = locator_poly.coeffs[p];
+            if (coeff) {
+                res ^= alpha_to[gf_reduce_exp(index_of[coeff] - p * pow)];
+            }
+        }
+
+        if (res == 0) {
+            num_errors += 1;
+            if ((size_t)pow < codeword_len) {
+                codeword_poly.coeffs[pow] ^= 1;
+            } else {
+                success = false;
+            }
+        }
+    }
+
+    if (num_errors != locator_poly.deg) {
+        success = false;
+    }
+
+    for (int pow = 1; pow < 2 * t + 1; pow++) {
+        if (gf_poly_eval_alpha_power(codeword_poly, pow) != 0) {
+            success = false;
+            break;
+        }
+    }
+
+    if (success) {
+        memcpy(msg, codeword + gen_poly.deg, codeword_len - gen_poly.deg);
+    }
+    free(syndromes);
+    free(locator_poly.coeffs);
+    return success;
 }
 
 void print_poly16(polynom16_t poly) {
@@ -245,15 +308,26 @@ void berlekamp_massey(uint16_t *syndromes, polynom16_t *C) {
         }
         free(correction.coeffs);
     }
+    free(B.coeffs);
 }
 
-// ######################################################
-// os.system("cls")
-
-// G = []
-
 polynom8_t g[12];
+static void bch_release_state(void) {
+    POLY_FREE(primitive_poly);
+    POLY_FREE(gen_poly);
+    for (size_t i = 0; i < sizeof(g) / sizeof(g[0]); i++) {
+        POLY_FREE(g[i]);
+    }
+    free(alpha_to);
+    free(index_of);
+    alpha_to = NULL;
+    index_of = NULL;
+    GF_SIZE = 0;
+    t = 0;
+}
+
 void bch_init() {
+    bch_release_state();
     bool b_short = 1;
     if (b_short) {
         POLY8_INIT(primitive_poly, {14,5,3,1,0});
@@ -288,7 +362,7 @@ void bch_init() {
     }
 
     t = 12;
-    POLY8_DEFINE(tmp, {0});
+    polynom8_t tmp = {0};
     poly_mul(g[0], g[1], &gen_poly);
     for (int i = 2; i < t; i += 2) {
         poly_mul(gen_poly, g[i], &tmp);
@@ -298,65 +372,4 @@ void bch_init() {
     }
 
     build_alpha_table();
-
-    const size_t msg_len = 14232;
-    uint8_t *msg = calloc(msg_len+gen_poly.deg, sizeof(uint8_t));
-    msg[433] = 1;
-    
-    encode(msg, msg_len, &msg[msg_len]);
-
-    polynom8_t codeword_poly = {0};
-    codeword_poly.deg = msg_len + gen_poly.deg - 1;
-    codeword_poly.coeffs = calloc(codeword_poly.deg + 1, sizeof(uint8_t));
-    memcpy(codeword_poly.coeffs, &msg[msg_len], gen_poly.deg);
-    memcpy(&codeword_poly.coeffs[gen_poly.deg], msg, msg_len);
-
-    uint16_t *syndromes = malloc(2 * t * sizeof(uint16_t));
-    int err = 123;
-    codeword_poly.coeffs[err++] ^= 1;
-    calc_syndromes(codeword_poly, syndromes);
-    for (int i = 0; i < 2 * t; i++) {
-        printf("S%d = %u\n", i + 1, syndromes[i]);
-    }
-
-    polynom16_t locator_poly = {0};
-    berlekamp_massey(syndromes, &locator_poly);
-
-    // chien
-    int num_errors = 0;
-    const size_t codeword_len = codeword_poly.deg + 1;
-    for (int pow = 0; pow < GF_SIZE; pow++) {
-        uint16_t res = 0;
-        for (int p = 0; p <= locator_poly.deg; p++) {
-            uint16_t coeff = locator_poly.coeffs[p];
-            if (coeff) {
-                res ^= alpha_to[gf_reduce_exp(index_of[coeff] - p * pow)];
-            }
-        }
-
-        if (res == 0) {
-            num_errors += 1;
-            if ((size_t)pow < codeword_len) {
-                codeword_poly.coeffs[pow] ^= 1;
-                printf("err at %d\n", pow);
-            } else {
-                printf("root outside shortened codeword at %d\n", pow);
-            }
-        }
-    }
-
-    if (num_errors != locator_poly.deg) {
-        printf("Decoding failure\n");
-    }
-
-    for (int pow = 1; pow < 2 * t + 1; pow++) {
-        if (gf_poly_eval_alpha_power(codeword_poly, pow) != 0) {
-            printf("Decoding failure\n");
-            break;
-        }
-    }
-    printf("Decoding success\n");
-
-    free(codeword_poly.coeffs);
-    free(syndromes);
 }
