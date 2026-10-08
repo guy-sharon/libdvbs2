@@ -49,6 +49,11 @@ static polynom8_t gen_poly = {0};
 // **************************************************************************** //
 // ******************************* Galois Field ******************************* //
 // **************************************************************************** //
+static uint16_t gf_reduce_exp(int exponent) {
+    int reduced = exponent % GF_SIZE;
+    return (uint16_t)(reduced < 0 ? reduced + GF_SIZE : reduced);
+}
+
 uint16_t gf_mul(uint16_t a, uint16_t b) {
     if (a == 0 || b == 0) {
         return 0;
@@ -62,7 +67,7 @@ uint16_t gf_div(uint16_t a, uint16_t b) {
         return 0;
     }
 
-    return alpha_to[(index_of[a] - index_of[b]) % GF_SIZE];
+    return alpha_to[gf_reduce_exp(index_of[a] - index_of[b])];
 }
 
 uint16_t arr_to_gf(uint8_t *arr, size_t len) {
@@ -180,13 +185,23 @@ void encode(uint8_t *msg, size_t msg_len, uint8_t *bchfec) {
     free(rem_poly.coeffs);
 }
 
+void print_poly16(polynom16_t poly) {
+    printf("deg: %u\n", poly.deg);
+    for (int i = 0; i < poly.deg+1; i++) {
+        printf("%u ", poly.coeffs[i]);
+    }
+    printf("\n");
+}
+
 void berlekamp_massey(uint16_t *syndromes, polynom16_t *C) {
     uint16_t L = 0;
     uint16_t b = 1;
     uint16_t m = 1;
-    polynom16_t B = {.coeffs = (uint16_t[]){1}, .deg=0};
-    C->deg = 2*t;
-    C->coeffs = calloc(C->deg+1, sizeof(uint16_t));
+    polynom16_t B = {.deg=0};
+    B.coeffs = calloc(1, sizeof(uint16_t));
+    B.coeffs[0] = 1;
+    C->deg = 0;
+    C->coeffs = calloc(2*t+1, sizeof(uint16_t));
     C->coeffs[0] = 1;
     for (uint8_t n = 0; n < 2*t; n++) {
         uint16_t d = syndromes[n];
@@ -202,27 +217,33 @@ void berlekamp_massey(uint16_t *syndromes, polynom16_t *C) {
             continue;
         }
 
-        polynom16_t T = {.deg = C->deg};
+        polynom16_t T = {.deg = C->deg, .coeffs = NULL};
         T.coeffs = malloc((C->deg+1)*sizeof(uint16_t));
-        memcpy(&T.coeffs, C->coeffs,(C->deg+1)*sizeof(uint16_t));
+        memcpy(T.coeffs, C->coeffs, (C->deg+1)*sizeof(uint16_t));
 
         uint16_t coef = gf_div(d, b);
-        polynom16_t correction = {.deg = m + B.deg};
+        polynom16_t correction = {.deg = m + B.deg, .coeffs = NULL};
         correction.coeffs = calloc(correction.deg+1, sizeof(uint16_t));
         for (int i = m; i < m+B.deg+1; i++) {
             correction.coeffs[i] = gf_mul(coef, B.coeffs[i-m]);
         }
 
         poly16_add(*C, correction, C);
+        while (C->deg > 0 && C->coeffs[C->deg] == 0) {
+            C->deg -= 1;
+        }
         if (2 * L <= n) {
             L = n + 1 - L;
             POLY_FREE(B);
             B.coeffs = T.coeffs;
+            B.deg = T.deg;
             b = d;
             m = 1;
         } else {
+            free(T.coeffs);
             m += 1;
         }
+        free(correction.coeffs);
     }
 }
 
@@ -290,47 +311,52 @@ void bch_init() {
     memcpy(codeword_poly.coeffs, &msg[msg_len], gen_poly.deg);
     memcpy(&codeword_poly.coeffs[gen_poly.deg], msg, msg_len);
 
-    uint16_t syndromes[2 * t];
+    uint16_t *syndromes = malloc(2 * t * sizeof(uint16_t));
+    int err = 123;
+    codeword_poly.coeffs[err++] ^= 1;
     calc_syndromes(codeword_poly, syndromes);
     for (int i = 0; i < 2 * t; i++) {
         printf("S%d = %u\n", i + 1, syndromes[i]);
     }
 
+    polynom16_t locator_poly = {0};
+    berlekamp_massey(syndromes, &locator_poly);
+
+    // chien
+    int num_errors = 0;
+    const size_t codeword_len = codeword_poly.deg + 1;
+    for (int pow = 0; pow < GF_SIZE; pow++) {
+        uint16_t res = 0;
+        for (int p = 0; p <= locator_poly.deg; p++) {
+            uint16_t coeff = locator_poly.coeffs[p];
+            if (coeff) {
+                res ^= alpha_to[gf_reduce_exp(index_of[coeff] - p * pow)];
+            }
+        }
+
+        if (res == 0) {
+            num_errors += 1;
+            if ((size_t)pow < codeword_len) {
+                codeword_poly.coeffs[pow] ^= 1;
+                printf("err at %d\n", pow);
+            } else {
+                printf("root outside shortened codeword at %d\n", pow);
+            }
+        }
+    }
+
+    if (num_errors != locator_poly.deg) {
+        printf("Decoding failure\n");
+    }
+
+    for (int pow = 1; pow < 2 * t + 1; pow++) {
+        if (gf_poly_eval_alpha_power(codeword_poly, pow) != 0) {
+            printf("Decoding failure\n");
+            break;
+        }
+    }
+    printf("Decoding success\n");
+
     free(codeword_poly.coeffs);
+    free(syndromes);
 }
-
-// print("decoding")
-// N = 50
-// t0 = time.perf_counter()
-// with cProfile.Profile() as pr:
-//     for _ in tqdm(range(N)):
-//         syndromes = calc_syndromes(codeword)
-//         locator_poly = berlekamp_massey(syndromes)
-
-//         # chien
-//         num_errors = 0
-//         for pow in range(1<<primitive_poly.deg):
-//             res = 0
-//             for p,coeff in enumerate(locator_poly.arr):
-//                 if coeff:
-//                     res ^= alpha_to[(index_of[coeff] - p*pow) % GF_SIZE]
-
-//             if res == 0:
-//                 num_errors += 1
-//                 codeword.arr[pow] ^= 1
-//                 print(pow)
-
-//         if num_errors != locator_poly.deg:
-//             print("Decoding failure")
-
-//         for pow in range(1,2*t+1):
-//             if gf_poly_eval_alpha_power(codeword, pow) != 0:
-//                 print("Decoding failure")
-//                 break
-            
-// stats = Stats(pr).sort_stats("cumtime")
-// stats.print_stats("test.py", 10) 
-
-// dt = time.perf_counter()
-// avg_time = dt / N
-// print(avg_time)
