@@ -3,8 +3,14 @@
     "tasks": [
         {
             "label": "Test",
-            "command": "make test",
+            "command": "make tests/bch_test",
             "type": "shell"
+        },
+        {
+            "label": "Build bch_test (debug)",
+            "command": "make bch_test_build",
+            "type": "shell",
+            "problemMatcher": []
         }
     ]
 }

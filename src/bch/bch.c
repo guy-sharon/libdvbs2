@@ -3,6 +3,7 @@
 #include "stdlib.h"
 #include "string.h"
 #include "stdbool.h"
+#include "assert.h"
 #include "stdio.h"
 
 // *********************************************************************** //
@@ -15,12 +16,12 @@ static uint8_t t = 0;
 
 typedef struct {
     uint8_t *coeffs;
-    uint8_t deg;
+    uint16_t deg;
 } polynom8_t;
 
 typedef struct {
     uint16_t *coeffs;
-    uint8_t deg;
+    uint16_t deg;
 } polynom16_t;
 
 static polynom8_t primitive_poly = {0};
@@ -106,7 +107,7 @@ void poly_mul(polynom8_t poly1, polynom8_t poly2, polynom8_t *out) {
 }
 
 void poly8_add(polynom8_t poly1, polynom8_t poly2, polynom8_t *out) {
-    uint8_t deg = poly1.deg > poly2.deg ? poly1.deg : poly2.deg;
+    uint16_t deg = poly1.deg > poly2.deg ? poly1.deg : poly2.deg;
     if (out->coeffs == NULL) {
         out->coeffs = calloc(deg+1, sizeof(uint8_t));
     }
@@ -119,7 +120,7 @@ void poly8_add(polynom8_t poly1, polynom8_t poly2, polynom8_t *out) {
 }
 
 void poly16_add(polynom16_t poly1, polynom16_t poly2, polynom16_t *out) {
-    uint8_t deg = poly1.deg > poly2.deg ? poly1.deg : poly2.deg;
+    uint16_t deg = poly1.deg > poly2.deg ? poly1.deg : poly2.deg;
     if (out->coeffs == NULL) {
         out->coeffs = calloc(deg+1, sizeof(uint16_t));
     }
@@ -157,21 +158,26 @@ void build_alpha_table() {
     free(lsfr);
 }
 
-void encode(uint8_t *msg, size_t msg_len, uint8_t *bchfec) {
-    polynom8_t rem_poly;
-
-    polynom8_t msg_poly = {.deg = msg_len + gen_poly.deg - 1};
-    msg_poly.coeffs = calloc(msg_poly.deg+1, sizeof(uint8_t));
-    memcpy(&msg_poly.coeffs[gen_poly.deg+1], msg, msg_len);
-
-    poly_div(msg_poly, gen_poly, &rem_poly);
-    memcpy(bchfec, rem_poly.coeffs, rem_poly.deg+1);
-}
-
 void calc_syndromes(polynom8_t codeword_poly, uint16_t *syndromes) {
     for (uint16_t power = 1; power < 2*t+1; power++) {
         syndromes[power-1] = gf_poly_eval_alpha_power(codeword_poly, power);
     }
+}
+
+void encode(uint8_t *msg, size_t msg_len, uint8_t *bchfec) {
+    polynom8_t msg_poly = {0};
+    polynom8_t rem_poly = {0};
+
+    /* msg_poly = msg * x^deg(gen_poly) */
+    msg_poly.deg = msg_len + gen_poly.deg - 1;
+    msg_poly.coeffs = calloc(msg_poly.deg + 1, sizeof(uint8_t));
+    memcpy(&msg_poly.coeffs[gen_poly.deg], msg, msg_len);
+
+    poly_div(msg_poly, gen_poly, &rem_poly);
+    memcpy(bchfec, rem_poly.coeffs, rem_poly.deg + 1);
+
+    free(msg_poly.coeffs);
+    free(rem_poly.coeffs);
 }
 
 void berlekamp_massey(uint16_t *syndromes, polynom16_t *C) {
@@ -225,16 +231,6 @@ void berlekamp_massey(uint16_t *syndromes, polynom16_t *C) {
 
 // G = []
 
-void print_poly(polynom8_t poly) {
-    printf("poly(deg=%d): ", poly.deg);
-    for (int i = 0; i < poly.deg+1; i++) {
-        if (poly.coeffs[i]) {
-            printf("x%d ", i);
-        }
-    }
-    printf("\n\n");
-}
-
 polynom8_t g[12];
 void bch_init() {
     bool b_short = 1;
@@ -280,26 +276,28 @@ void bch_init() {
         POLY_FREE(tmp);
     }
 
+    build_alpha_table();
+
+    const size_t msg_len = 14232;
+    uint8_t *msg = calloc(msg_len+gen_poly.deg, sizeof(uint8_t));
+    msg[433] = 1;
+    
+    encode(msg, msg_len, &msg[msg_len]);
+
+    polynom8_t codeword_poly = {0};
+    codeword_poly.deg = msg_len + gen_poly.deg - 1;
+    codeword_poly.coeffs = calloc(codeword_poly.deg + 1, sizeof(uint8_t));
+    memcpy(codeword_poly.coeffs, &msg[msg_len], gen_poly.deg);
+    memcpy(&codeword_poly.coeffs[gen_poly.deg], msg, msg_len);
+
+    uint16_t syndromes[2 * t];
+    calc_syndromes(codeword_poly, syndromes);
+    for (int i = 0; i < 2 * t; i++) {
+        printf("S%d = %u\n", i + 1, syndromes[i]);
+    }
+
+    free(codeword_poly.coeffs);
 }
-
-// print("building alpha table...")
-// build_alpha_table(primitive_poly)
-
-// print("building rem lut table")
-// build_rem_lut_table(gen_poly, GF_SIZE)
-
-// msg = np.random.randint(0, 2, 14232)
-// print("encoding")
-// codeword = encode(msg)
-
-// # errors
-// codeword.arr[2] ^= 1
-// codeword.arr[13] ^= 1
-// codeword.arr[9] ^= 1
-// codeword.arr[439] ^= 1
-// codeword.arr[4391] ^= 1
-// codeword.arr[4329] ^= 1
-// codeword.arr[9439] ^= 1
 
 // print("decoding")
 // N = 50
