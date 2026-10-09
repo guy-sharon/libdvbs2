@@ -317,7 +317,7 @@ bool bch_decode(uint8_t *frame) {
 }
 
 
-static void build_alpha_table() {
+static void build_alpha_table(void) {
     GF_SIZE = (1<<primitive_poly.deg)-1;
     alpha_to = malloc(GF_SIZE*sizeof(uint16_t));
     index_of = malloc((GF_SIZE+1)*sizeof(uint16_t));
@@ -332,10 +332,6 @@ static void build_alpha_table() {
     free(lsfr);
 }
 
-size_t bch_parity_bytes(void) {
-    return parity_len;
-}
-
 static void bch_free(void) {
     POLY_FREE(primitive_poly);
     POLY_FREE(gen_poly);
@@ -347,7 +343,7 @@ static void bch_free(void) {
     parity_len = 0;
 }
 
-static void build_generator_poly() {
+static void build_generator_poly(void) {
     polynom8_t g[12];
     if (modcod.short_frame) {
         POLY8_INIT(primitive_poly, {14,5,3,1,0});

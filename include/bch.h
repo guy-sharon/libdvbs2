@@ -7,7 +7,6 @@
 #include "modcod.h"
 
 void bch_init(modcod_t modcod);
-size_t bch_parity_bytes(void);
 void bch_encode(uint8_t *frame);
 bool bch_decode(uint8_t *frame);
 
