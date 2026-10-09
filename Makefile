@@ -82,11 +82,11 @@ $(PROFILE_LIB): $(PROFILE_OBJ)
 
 $(PROFILE_DIR)/%.o: src/%.c FORCE_PROFILE
 	@mkdir -p $(dir $@)
-	$(CC) $(CPPFLAGS) $(CFLAGS) -O2 -g -fno-omit-frame-pointer -c -o $@ $<
+	$(CC) $(CPPFLAGS) $(CFLAGS) -O0 -g -fno-omit-frame-pointer -c -o $@ $<
 
 $(PROFILE_BIN): tests/time_test.c $(TEST_SUPPORT) $(PROFILE_LIB) FORCE_PROFILE
 	@mkdir -p $(dir $@)
-	$(CC) $(CPPFLAGS) $(CFLAGS) -O2 -g -fno-omit-frame-pointer -o $@ tests/time_test.c $(TEST_SUPPORT) $(PROFILE_LIB)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -O0 -g -fno-omit-frame-pointer -o $@ tests/time_test.c $(TEST_SUPPORT) $(PROFILE_LIB)
 
 FORCE_PROFILE:
 
