@@ -2,7 +2,7 @@ ifeq ($(origin CC), default)
 CC := $(shell (command -v cc >/dev/null 2>&1 && echo cc) || (where cc >/dev/null 2>&1 && echo cc) || echo gcc)
 endif
 AR      ?= ar
-CFLAGS  ?= -std=c99 -Wall -Werror -Wextra -Wpedantic -O2
+CFLAGS  ?= -std=c99 -Wall -Werror -Wextra -Wpedantic -Ofast
 
 # Detect number of CPUs for parallel builds
 JOBS := $(shell \
