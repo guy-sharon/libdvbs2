@@ -4,12 +4,12 @@
 #include <string.h>
 
 #include "bch.h"
+#include "modcod.h"
 
 static void test_encode_decode_corrects_three_errors(void)
 {
     enum { MSG_LEN = 64 };
-    bch_init();
-    bch_init();
+    bch_init(SHORT_1_4);
 
     const size_t parity_len = bch_parity_bytes();
     const size_t codeword_len = MSG_LEN + parity_len;
@@ -23,14 +23,14 @@ static void test_encode_decode_corrects_three_errors(void)
         msg[i] = (uint8_t)((i * 37 + 11) & 1);
     }
 
-    encode(msg, MSG_LEN, codeword);
+    bch_encode(msg, MSG_LEN, codeword);
     memcpy(codeword + parity_len, msg, MSG_LEN);
     memcpy(expected, codeword, codeword_len);
     codeword[0] ^= 1;
     codeword[37] ^= 1;
     codeword[parity_len + 12] ^= 1;
 
-    assert(decode(codeword, codeword_len, decoded));
+    assert(bch_decode(codeword, codeword_len, decoded));
     assert(memcmp(decoded, msg, MSG_LEN) == 0);
     assert(memcmp(codeword, expected, codeword_len) == 0);
     free(codeword);
