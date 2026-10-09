@@ -173,32 +173,46 @@ static void poly8_mul(polynom8_t poly1, polynom8_t poly2, polynom8_t *out) {
 
 static void poly16_add(polynom16_t poly1, polynom16_t poly2, polynom16_t *out) {
     uint16_t deg = poly1.deg > poly2.deg ? poly1.deg : poly2.deg;
-    if (out->coeffs == NULL) {
-        out->coeffs = calloc(deg+1, sizeof(uint16_t));
-    }
-    out->deg = deg;
-    for (int i = 0; i < deg+1; i++) {
+    polynom16_t tmp = {.deg = deg, .coeffs = calloc(deg + 1, sizeof(uint16_t))};
+
+    for (int i = 0; i < deg + 1; i++) {
         uint16_t v1 = i > poly1.deg ? 0 : poly1.coeffs[i];
         uint16_t v2 = i > poly2.deg ? 0 : poly2.coeffs[i];
-        out->coeffs[i] = v1 ^ v2;
+        tmp.coeffs[i] = v1 ^ v2;
     }
+
+    free(out->coeffs);
+    out->coeffs = tmp.coeffs;
+    out->deg = deg;
 }
 
 // **************************************************************************** //
 // ********************************* Encoding ********************************* //
 // **************************************************************************** //
-void bch_encode(uint8_t *msg, size_t msg_len, uint8_t *bchfec) {
-    polynom8_t msg_poly = {.deg = msg_len - 1, .coeffs = msg};
-    polynom8_t rem_poly = {.coeffs = bchfec};
-    poly8_div(msg_poly, gen_poly, gen_poly.deg, &rem_poly);
+void bch_encode(uint8_t *frame) {
+    if (frame == NULL) {
+        return;
+    }
+
+    polynom8_t data_poly = {.deg = modcod.kbch - 1, .coeffs = frame};
+    polynom8_t rem_poly = {.coeffs = &frame[modcod.kbch]};
+    poly8_div(data_poly, gen_poly, parity_len, &rem_poly);
 }
 
 // **************************************************************************** //
 // ********************************* Decoding ********************************* //
 // **************************************************************************** //
-static void calc_syndromes(polynom8_t codeword_poly, uint16_t *syndromes) {
+static uint16_t calc_syndrome(polynom8_t data_poly, 
+                              polynom8_t rem_poly, uint16_t power) {
+    uint16_t syndrome = gf_poly8_eval_alpha_power(rem_poly, power);
+    syndrome ^= gf_mul(alpha_to[(power*parity_len) % GF_SIZE],
+                gf_poly8_eval_alpha_power(data_poly, power));
+    return syndrome;
+}
+static void calc_syndromes(polynom8_t data_poly, 
+                           polynom8_t rem_poly, uint16_t *syndromes) {
     for (uint16_t power = 1; power < 2*modcod.bch_t+1; power++) {
-        syndromes[power-1] = gf_poly8_eval_alpha_power(codeword_poly, power);
+        syndromes[power-1] = calc_syndrome(data_poly, rem_poly, power);
     }
 }
 
@@ -251,48 +265,54 @@ static void berlekamp_massey(uint16_t *syndromes, polynom16_t *C) {
     POLY_FREE(B);
 }
 
-static void correct_errors(polynom8_t codeword_poly, int *error_positions, int num_errors) {
+static void correct_errors(uint8_t *data, int *error_positions, int num_errors) {
     for (int i = 0; i < num_errors; i++) {
-        codeword_poly.coeffs[error_positions[i]] ^= 1;
+        data[error_positions[i]] ^= 1;
     }
 }
 
-bool bch_decode(uint8_t *codeword, size_t codeword_len, uint8_t *msg) {
-    polynom8_t codeword_poly = {.deg = codeword_len - 1, .coeffs = codeword};
-    uint16_t syndromes[2*MAX_BCH_T] = {0};
-    int error_positions[MAX_BCH_T] = {-1};
+int locate_errors(polynom16_t locator_poly, int *error_positions) {
     int num_errors = 0;
-
-    if (codeword == NULL || msg == NULL || codeword_len <= gen_poly.deg) {
-        return false;
-    }
-    
-    calc_syndromes(codeword_poly, syndromes);
-    memset(&locator_poly, 0, sizeof(polynom16_t));
-    berlekamp_massey(syndromes, &locator_poly);
-    for (size_t pow = 0; pow < codeword_len; pow++) {
-        if (gf_poly16_eval_alpha_power(locator_poly, GF_SIZE - pow) == 0) {
-            error_positions[num_errors++] = (int)pow;
+    for (uint16_t p = 0; p < modcod.nbch; p++) {
+        if (gf_poly16_eval_alpha_power(locator_poly, GF_SIZE - p) == 0) {
+            error_positions[num_errors++] = p < parity_len ? p + modcod.kbch : 
+                                                             p - parity_len;
             if (num_errors > modcod.bch_t) {
-                return false;
+                return -1;
             }
         }
     }
+    return num_errors;
+}
+
+bool bch_decode(uint8_t *frame) {
+    polynom8_t data_poly = {.deg = modcod.kbch - 1, .coeffs = frame};
+    polynom8_t rem_poly = {.deg = parity_len - 1, .coeffs = &frame[modcod.kbch]};
+    memset(&locator_poly, 0, sizeof(locator_poly));
+    uint16_t syndromes[2 * MAX_BCH_T] = {0};
+    int error_positions[MAX_BCH_T] = {-1};
+
+    if (frame == NULL) {
+        return false;
+    }
+
+    calc_syndromes(data_poly, rem_poly, syndromes);
+    berlekamp_massey(syndromes, &locator_poly);
+    int num_errors = locate_errors(locator_poly, error_positions);
 
     if (num_errors != locator_poly.deg) {
         return false;
     }
-    
-    correct_errors(codeword_poly, error_positions, num_errors);
-    // check if all syndromes are zero after correction
-    for (size_t pow = 1; pow < (size_t)(2 * modcod.bch_t + 1); pow++) {
-        if (gf_poly8_eval_alpha_power(codeword_poly, pow) != 0) {
-            correct_errors(codeword_poly, error_positions, num_errors); // undo correction
+
+    correct_errors(frame, error_positions, num_errors);
+    for (uint16_t p = 1; p < 2 * modcod.bch_t + 1; p++) {
+        if (calc_syndrome(data_poly, rem_poly, p) != 0) {
+            // recover original frame (to avoid increasing num errors)
+            correct_errors(frame, error_positions, num_errors);
             return false;
         }
     }
-    
-    memcpy(msg, codeword + gen_poly.deg, codeword_len - gen_poly.deg);
+
     return true;
 }
 
@@ -380,7 +400,7 @@ void bch_init(modcod_t _modcod) {
     bch_free();
 
     modcod = _modcod;
-    parity_len = modcod.kldpc - modcod.kbch;
+    parity_len = modcod.nbch - modcod.kbch;
     
     build_generator_poly();
     build_alpha_table();

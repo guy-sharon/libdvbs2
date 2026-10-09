@@ -21,6 +21,7 @@
 typedef struct {
     bool short_frame; /* true for short FECFRAME, false for normal FECFRAME */
     uint16_t kbch;
+    uint16_t nbch;
     uint16_t kldpc;
     uint16_t nldpc;
     uint8_t bch_t;
@@ -28,7 +29,7 @@ typedef struct {
 
 #define MODCOD(name, _short_frame, _kbch, _kldpc, _bch_t, _nldpc) \
     static const modcod_t name = {.short_frame=_short_frame, \
-                                  .kbch=_kbch, .kldpc=_kldpc, \
+                                  .kbch=_kbch, .nbch=_kldpc, .kldpc=_kldpc, \
                                   .bch_t=_bch_t, \
                                   .nldpc=_nldpc}
 
