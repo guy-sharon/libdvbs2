@@ -9,6 +9,7 @@
 #include "crc.h"
 #include "bbframe.h"
 #include "frame.h"
+#include "bch.h"
 
 #define ITERATIONS 100
 #define KB (1024)
@@ -83,6 +84,34 @@ static void bench_frame(void) {
     free(ref);
 }
 
+void bench_bch(void) {
+    const modcod_t modcods[] = {
+        SHORT_1_4, SHORT_1_3, SHORT_2_5, SHORT_1_2, SHORT_3_5,
+        SHORT_2_3, SHORT_3_4, SHORT_4_5, SHORT_5_6, SHORT_8_9,
+        NORMAL_1_4, NORMAL_1_3, NORMAL_2_5, NORMAL_1_2, NORMAL_3_5,
+        NORMAL_2_3, NORMAL_3_4, NORMAL_4_5, NORMAL_5_6, NORMAL_8_9,
+        NORMAL_9_10
+    };
+
+    for (size_t i = 0; i < sizeof(modcods) / sizeof(modcods[0]); i++) {
+        bch_init(modcods[i]);
+        uint8_t *frame = malloc(modcods[i].nbch);
+        for (size_t j = 0; j < modcods[i].kbch; j++)
+            frame[j] = (uint8_t)(j & 0xFF);
+        bch_encode(frame);
+
+        double t0 = now_ms();
+        for (int it = 0; it < ITERATIONS; it++) {
+            bch_decode(frame);
+        }
+        double dt = (now_ms() - t0) / ITERATIONS;
+        double mbps = (modcods[i].kbch / 1024.0) / dt;
+        printf("  bch_decode (%s, kbch=%u):  %8.3f ms/iter  (%.1f MB/s)\n",
+               modcods[i].short_frame ? "SHORT" : "NORMAL",
+               modcods[i].kbch, dt, mbps);
+        free(frame);
+    }
+}
 int main(void) {
     printf("=== DVB-S2 Performance Benchmarks ===\n\n");
     printf("CRC-8:\n");
@@ -91,6 +120,8 @@ int main(void) {
     bench_scramble();
     printf("\nFrame-level:\n");
     bench_frame();
+    printf("\nBCH:\n");
+    bench_bch();
     printf("\nDone.\n");
     return 0;
 }
