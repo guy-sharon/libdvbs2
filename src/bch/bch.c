@@ -93,9 +93,15 @@ static uint16_t arr_to_gf(uint8_t *arr, size_t len) {
 
 static uint16_t gf_poly8_eval_alpha_power(polynom8_t poly, uint16_t power) {
     uint16_t res = 0;
+    uint32_t exponent = 0;
+    const uint32_t step = power % GF_SIZE;
     for (int i = 0; i < poly.deg+1; i++) {
         if (poly.coeffs[i]) {
-            res ^= alpha_to[(i*power) % GF_SIZE];
+            res ^= alpha_to[exponent];
+        }
+        exponent += step;
+        if (exponent >= GF_SIZE) {
+            exponent -= GF_SIZE;
         }
     }
     return res;
