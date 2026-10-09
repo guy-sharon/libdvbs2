@@ -31,10 +31,13 @@ static polynom8_t gen_poly = {0};
 
 static modcod_t modcod;
 static size_t parity_len = 0; // number of parity bits
+static polynom16_t locator_poly;
 
 // *********************************************************************** //
 // ******************************* Defines ******************************* //
 // *********************************************************************** //
+#define MAX_BCH_T       12
+
 #define POLY_FREE(poly) \
     do { \
         free((poly).coeffs); \
@@ -256,51 +259,41 @@ static void correct_errors(polynom8_t codeword_poly, int *error_positions, int n
 
 bool bch_decode(uint8_t *codeword, size_t codeword_len, uint8_t *msg) {
     polynom8_t codeword_poly = {.deg = codeword_len - 1, .coeffs = codeword};
-    polynom16_t locator_poly = {0};
-    uint16_t syndromes[24] = {0};
+    uint16_t syndromes[2*MAX_BCH_T] = {0};
+    int error_positions[MAX_BCH_T] = {-1};
     int num_errors = 0;
-    int error_positions[12] = {-1};
-    bool success = false;
 
     if (codeword == NULL || msg == NULL || codeword_len <= gen_poly.deg) {
-        goto finish;
+        return false;
     }
-
+    
     calc_syndromes(codeword_poly, syndromes);
+    memset(&locator_poly, 0, sizeof(polynom16_t));
     berlekamp_massey(syndromes, &locator_poly);
-
-    success = true;
     for (size_t pow = 0; pow < codeword_len; pow++) {
         if (gf_poly16_eval_alpha_power(locator_poly, GF_SIZE - pow) == 0) {
-            error_positions[num_errors] = (int)pow;
-            num_errors += 1;
+            error_positions[num_errors++] = (int)pow;
             if (num_errors > modcod.bch_t) {
-                success = false;
-                goto finish;
+                return false;
             }
         }
     }
 
     if (num_errors != locator_poly.deg) {
-        success = false;
-        goto finish;
+        return false;
     }
     
     correct_errors(codeword_poly, error_positions, num_errors);
     // check if all syndromes are zero after correction
     for (size_t pow = 1; pow < (size_t)(2 * modcod.bch_t + 1); pow++) {
         if (gf_poly8_eval_alpha_power(codeword_poly, pow) != 0) {
-            success = false;
             correct_errors(codeword_poly, error_positions, num_errors); // undo correction
-            goto finish;
+            return false;
         }
     }
-
+    
     memcpy(msg, codeword + gen_poly.deg, codeword_len - gen_poly.deg);
-
-finish:
-    POLY_FREE(locator_poly);
-    return success;
+    return true;
 }
 
 
@@ -319,7 +312,7 @@ static void build_alpha_table() {
     free(lsfr);
 }
 
-size_t bch_parity_bytes() {
+size_t bch_parity_bytes(void) {
     return parity_len;
 }
 
@@ -330,6 +323,8 @@ static void bch_free(void) {
     free(index_of);
     alpha_to = NULL;
     index_of = NULL;
+    modcod = (modcod_t){0};
+    parity_len = 0;
 }
 
 static void build_generator_poly() {
