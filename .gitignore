@@ -8,3 +8,5 @@ tests/**/test
 tests/*_test
 *.svg
 *.exe
+/build/
+/profile.txt
