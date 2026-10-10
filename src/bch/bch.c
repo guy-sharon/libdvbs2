@@ -107,6 +107,20 @@ static uint16_t gf_poly8_eval_alpha_power(polynom8_t poly, uint16_t power) {
     return res;
 }
 
+/* In GF(2^m), Frobenius gives f(alpha^(2p)) = f(alpha^p)^2 for a
+ * polynomial f with binary coefficients. */
+static uint16_t gf_square(uint16_t a) {
+    if (a == 0) {
+        return 0;
+    }
+
+    uint32_t exponent = 2u * index_of[a];
+    if (exponent >= GF_SIZE) {
+        exponent -= GF_SIZE;
+    }
+    return alpha_to[exponent];
+}
+
 static uint16_t gf_poly16_eval_alpha_power(polynom16_t poly, uint16_t power) {
     uint16_t res = 0;
     for (int p = 0; p <= poly.deg; p++) {
@@ -217,8 +231,15 @@ static uint16_t calc_syndrome(polynom8_t data_poly,
 }
 static void calc_syndromes(polynom8_t data_poly, 
                            polynom8_t rem_poly, uint16_t *syndromes) {
-    for (uint16_t power = 1; power < 2*modcod.bch_t+1; power++) {
+    const uint16_t syndrome_count = 2 * modcod.bch_t;
+
+    /* Only the odd syndromes need a polynomial evaluation.  For a binary
+     * code, S[2p] is S[p]^2, so derive every even syndrome cheaply. */
+    for (uint16_t power = 1; power <= syndrome_count; power += 2) {
         syndromes[power-1] = calc_syndrome(data_poly, rem_poly, power);
+    }
+    for (uint16_t power = 2; power <= syndrome_count; power += 2) {
+        syndromes[power-1] = gf_square(syndromes[power/2-1]);
     }
 }
 
@@ -311,8 +332,9 @@ bool bch_decode(uint8_t *frame) {
     }
 
     correct_errors(frame, error_positions, num_errors);
-    for (uint16_t p = 1; p < 2 * modcod.bch_t + 1; p++) {
-        if (calc_syndrome(data_poly, rem_poly, p) != 0) {
+    calc_syndromes(data_poly, rem_poly, syndromes);
+    for (uint16_t p = 0; p < 2 * modcod.bch_t; p++) {
+        if (syndromes[p] != 0) {
             // recover original frame (to avoid increasing num errors)
             correct_errors(frame, error_positions, num_errors);
             return false;
@@ -322,7 +344,9 @@ bool bch_decode(uint8_t *frame) {
     return true;
 }
 
-
+// **************************************************************************** //
+// *********************************** BCH ************************************ //
+// **************************************************************************** //
 static void build_alpha_table(void) {
     GF_SIZE = (1<<primitive_poly.deg)-1;
     alpha_to = malloc(GF_SIZE*sizeof(uint16_t));
