@@ -224,6 +224,7 @@ void bch_encode(uint8_t *frame) {
 // **************************************************************************** //
 static uint16_t calc_syndrome(polynom8_t data_poly, 
                               polynom8_t rem_poly, uint16_t power) {
+    // Syndrome S[p] = R(alpha^p), where R(x) = x^m*data_poly(x) + rem_poly(x)
     uint16_t syndrome = gf_poly8_eval_alpha_power(rem_poly, power);
     syndrome ^= gf_mul(alpha_to[(power*parity_len) % GF_SIZE],
                 gf_poly8_eval_alpha_power(data_poly, power));
@@ -325,6 +326,9 @@ bool bch_decode(uint8_t *frame) {
 
     calc_syndromes(data_poly, rem_poly, syndromes);
     berlekamp_massey(syndromes, &locator_poly);
+    if (locator_poly.deg == 0) {
+        return true;
+    }
     int num_errors = locate_errors(locator_poly, error_positions);
 
     if (num_errors != locator_poly.deg) {
